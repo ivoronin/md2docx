@@ -4,6 +4,7 @@ import sys
 
 from docx import Document
 from docx.shared import Inches
+from docx.enum.text import WD_BREAK
 import mistune
 
 class DocXMarkdown(mistune.Markdown):
@@ -38,6 +39,10 @@ class DocXRenderer(mistune.Renderer):
 
     def hrule(self):
         self.doc.paragraphs[-1].runs[-1].add_break(WD_BREAK.PAGE)
+        return ''
+
+    def block_quote(self, text):
+        self.doc.paragraphs[-1].style = "Quote"
         return ''
 
     def paragraph(self, text):

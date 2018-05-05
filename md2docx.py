@@ -36,6 +36,10 @@ class DocXRenderer(mistune.Renderer):
         self.doc.add_heading(text, level)
         return ''
 
+    def hrule(self):
+        self.doc.paragraphs[-1].runs[-1].add_break(WD_BREAK.PAGE)
+        return ''
+
     def paragraph(self, text):
         self.doc.add_paragraph(text, style=None)
         return ''

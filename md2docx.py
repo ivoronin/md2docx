@@ -1,5 +1,5 @@
 import argparse
-import StringIO
+import io
 import sys
 
 from docx import Document
@@ -8,8 +8,8 @@ import mistune
 
 class DocXMarkdown(mistune.Markdown):
     def parse(self, text):
-        s = StringIO.StringIO()
-        ret = super(DocXMarkdown, self).parse(text)
+        s = io.BytesIO()
+        super().parse(text)
         self.renderer.doc.save(s)
         return s.getvalue()
         
@@ -18,10 +18,10 @@ class DocXRenderer(mistune.Renderer):
     def __init__(self, *largs, **kargs):
         self.doc = Document()
         self.clist = None
-        super(DocXRenderer, self).__init__(*largs, **kargs)
+        super().__init__(*largs, **kargs)
 
     def list_item(self, text):
-        return "{}\n".format(text)
+        return f"{text}\n"
       
     def list(self, body, ordered=True):
         if ordered:

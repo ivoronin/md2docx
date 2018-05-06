@@ -43,9 +43,9 @@ class DocXRenderer(mistune.Renderer):
 
     def list(self, body, ordered=True):
         if ordered:
-            style = 'ListNumber3'
+            style = 'List Number 3'
         else:
-            style = 'ListBullet'
+            style = 'List Bullet'
         for i in body.rstrip().split('\n'):
             self.doc.add_paragraph(i, style)
         return ''

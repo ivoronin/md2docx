@@ -4,6 +4,7 @@ md2docs - renders markdown as Microsoft Word documents
 import argparse
 import io
 import sys
+import re
 from importlib import import_module
 from docx import Document
 from docx.enum.text import WD_BREAK
@@ -62,7 +63,34 @@ class DocXRenderer(mistune.Renderer):
         return ''
 
     def paragraph(self, text):
-        self.doc.add_paragraph(text, style=None)
+        para = self.doc.add_paragraph()
+
+        while text:
+            pattern = re.compile(r'<(\w+)>([^>]*)</\1>') # <tag>text</tag>
+            result = pattern.split(text, maxsplit=1)
+
+            # No tags found
+            if len(result) == 1:
+                para.add_run(text)
+                break
+
+            beginning, tag, content, remainder = result
+
+            if beginning:
+                para.add_run(beginning)
+
+            if tag == 'em':
+                para.add_run(content, 'Emphasis')
+            elif tag == 'strong':
+                para.add_run(content, 'Strong')
+            elif tag == 'del':
+                run = para.add_run(content)
+                run.font.strike = True
+            else:
+                print(f"Unexpected tag {tag}")
+
+            text = remainder
+
         return ''
 
 def parse_args(args):

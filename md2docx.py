@@ -1,6 +1,7 @@
 import argparse
 import io
 import sys
+from importlib import import_module
 
 from docx import Document
 from docx.enum.text import WD_BREAK
@@ -15,8 +16,10 @@ class DocXMarkdown(mistune.Markdown):
         
 
 class DocXRenderer(mistune.Renderer):
-    def __init__(self, *largs, **kargs):
+    def __init__(self, style, *largs, **kargs):
         self.doc = Document()
+        if style:
+            style.apply(self.doc)
         self.clist = None
         super().__init__(*largs, **kargs)
 
@@ -52,14 +55,23 @@ def parse_args(args):
     parser = argparse.ArgumentParser(description="Converts a markdown document into docx")
     parser.add_argument("input", help="Markdown input file")
     parser.add_argument("output", help="docx output file (will overwrite if it already exists)")
+    parser.add_argument('--style', '-s', default='default', help="Style name to use")
     args  = parser.parse_args()
     return args
                             
 
 def main():
-    renderer = DocXRenderer()
-    markdown = DocXMarkdown(renderer = renderer)
     args = parse_args(sys.argv[1:])
+    if args.style:
+        try:
+            style = import_module(f'styles.{args.style}').Style
+        except ModuleNotFoundError:
+            print(f"{sys.argv[0]}: style {args.style} is not found")
+            sys.exit(1)
+    else:
+        style = None
+    renderer = DocXRenderer(style)
+    markdown = DocXMarkdown(renderer = renderer)
     with open(args.input) as f:
         with open(args.output, "wb") as g:
             g.write(markdown(f.read()))

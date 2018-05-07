@@ -74,7 +74,7 @@ class DocXRenderer(mistune.Renderer):
                 para.add_run(text)
                 break
 
-            beginning, tag, content, remainder = result
+            beginning, tag, content, text = result
 
             if beginning:
                 para.add_run(beginning)
@@ -88,8 +88,6 @@ class DocXRenderer(mistune.Renderer):
                 run.font.strike = True
             else:
                 print(f"Unexpected tag {tag}")
-
-            text = remainder
 
         return ''
 

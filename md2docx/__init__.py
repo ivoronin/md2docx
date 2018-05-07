@@ -113,7 +113,7 @@ def main():
     args = parse_args(sys.argv[1:])
     if args.style:
         try:
-            style = import_module(f'styles.{args.style}').Style
+            style = import_module(f'{__name__}.styles.{args.style}').Style
         except ModuleNotFoundError:
             print(f"{sys.argv[0]}: style {args.style} is not found")
             sys.exit(1)

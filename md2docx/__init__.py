@@ -9,87 +9,82 @@ from importlib import import_module
 from docx import Document
 from docx.enum.text import WD_BREAK
 import mistune
+from lxml import etree
 
 
-class DocXMarkdown(mistune.Markdown):
-    """
-    Overrides parse() method
-    """
-    def parse(self, text):
-        super().parse(text)
-        stream = io.BytesIO()
-        self.renderer.doc.save(stream)
-        return stream.getvalue()
-
-
-class DocXRenderer(mistune.Renderer):
-    """
-    Renders markdown to docx document
-    """
-    def __init__(self, style, *largs, **kargs):
-        """
-        Constructor
-        Arguments:
-            style (class): Class containing `apply` static method
-        """
-        self.doc = Document()
+class DocXWriter:
+    """Parses html, writes docx"""
+    def __init__(self, output, style=None):
+        self._doc = Document()
+        self._output = output
         if style:
-            style.apply(self.doc)
-        self.clist = None
-        super().__init__(*largs, **kargs)
+            style.apply(self._doc)
+        self._cur_para = None
+        self._para_style_stack = [None]
+        self._list_level = 0
 
-    def list_item(self, text):
-        return f"{text}\n"
+    def parse(self, html):
+        """Parses supplied html string"""
+        parser = etree.XMLParser(remove_blank_text=True)
+        tree = etree.XML('<html>' + html + '</html>', parser=parser)
+        self._walk(tree)
+        self._doc.save(self._output)
 
-    def list(self, body, ordered=True):
-        if ordered:
-            style = 'List Number 3'
-        else:
-            style = 'List Bullet'
-        for i in body.rstrip().split('\n'):
-            self.doc.add_paragraph(i, style)
-        return ''
+    @property
+    def _next_para_style(self):
+        assert self._para_style_stack
+        return self._para_style_stack[-1]
 
-    def header(self, text, level, raw=None):
-        self.doc.add_heading(text, level)
-        return ''
-
-    def hrule(self):
-        self.doc.paragraphs[-1].runs[-1].add_break(WD_BREAK.PAGE)
-        return ''
-
-    def block_quote(self, text):
-        self.doc.paragraphs[-1].style = 'Quote'
-        return ''
-
-    def paragraph(self, text):
-        para = self.doc.add_paragraph()
-
-        while text:
-            pattern = re.compile(r'<(\w+)>([^>]*)</\1>') # <tag>text</tag>
-            result = pattern.split(text, maxsplit=1)
-
-            # No tags found
-            if len(result) == 1:
-                para.add_run(text)
-                break
-
-            beginning, tag, content, text = result
-
-            if beginning:
-                para.add_run(beginning)
-
-            if tag == 'em':
-                para.add_run(content, 'Emphasis')
-            elif tag == 'strong':
-                para.add_run(content, 'Strong')
-            elif tag == 'del':
-                run = para.add_run(content)
-                run.font.strike = True
+    def _walk(self, root):
+        for elem in root:
+            # At element start
+            if elem.tag in ['h1', 'h2', 'h3', 'h4', 'h5', 'h6']:
+                level = int(elem.tag[1])
+                self._doc.add_heading(elem.text, level=level)
+            elif elem.tag == 'blockquote':
+                self._para_style_stack.append('Quote')
+            elif elem.tag == 'p':
+                self._cur_para = self._doc.add_paragraph(elem.text, style=self._next_para_style)
+            elif elem.tag == 'hr':
+                self._doc.paragraphs[-1].runs[-1].add_break(WD_BREAK.PAGE)
+            elif elem.tag in ['ul', 'ol']:
+                self._list_level += 1
+                assert self._list_level in range(1, 4)
+                style_suffix = '' if self._list_level == 1 else f' {self._list_level}'
+                style_kind = 'Bullet' if elem.tag == 'ul' else 'Number'
+                style_name = f'List {style_kind}{style_suffix}'
+                self._para_style_stack.append(style_name)
+            elif elem.tag == 'li':
+                self._cur_para = self._doc.add_paragraph(elem.text, style=self._next_para_style)
+            elif elem.tag == 'strong':
+                self._cur_para.add_run(elem.text, style='Strong')
+            elif elem.tag == 'em':
+                self._cur_para.add_run(elem.text, style='Emphasis')
             else:
-                print(f"Unexpected tag {tag}")
+                raise RuntimeError(f"Unexpected tag {elem.tag}")
 
-        return ''
+            # Recursively walk
+            self._walk(elem)
+
+            # At element end
+            if elem.tag in ['ul', 'ol']:
+                self._list_level -= 1
+                self._para_style_stack.pop()
+            elif elem.tag == 'blockquote':
+                self._para_style_stack.pop()
+            elif elem.tag in ['p', 'ul']:
+                self._cur_para = None
+
+            # Add all non-whitespace tails to current paragraph
+            if elem.tail and not elem.tail.isspace():
+                self._cur_para.add_run(elem.tail)
+
+
+def walk(root):
+    for element in root:
+        print(element.tag, element.text, element.tail)
+        walk(element)
+
 
 def parse_args(args):
     """
@@ -106,6 +101,7 @@ def parse_args(args):
     args = parser.parse_args()
     return args
 
+
 def main():
     """
     Main entry point
@@ -119,11 +115,10 @@ def main():
             sys.exit(1)
     else:
         style = None
-    renderer = DocXRenderer(style)
-    markdown = DocXMarkdown(renderer=renderer)
+    markdown = mistune.Markdown(renderer=mistune.Renderer(use_xhtml=1))
     with open(args.input) as source:
-        with open(args.output, 'wb') as target:
-            target.write(markdown(source.read()))
+        html = markdown(source.read())
+    DocXWriter(args.output, style).parse(html)
 
 if __name__ == '__main__':
     main()
